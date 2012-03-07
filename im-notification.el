@@ -61,7 +61,7 @@ Deliberately ignores minibuffer since that has its own hooks.")
       (capitalize 
        (cadddr (find current-input-method 
 		     input-method-alist 
-		     :test (lambda (a b) (string-equal a (car b))))))
+		     :test 'string-equal)))))
     "nil"))
 
 (defun im-notification-send-current ()
