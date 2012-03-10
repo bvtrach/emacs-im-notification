@@ -5,4 +5,4 @@ Just add im-notification.el to 'your load-path, and than append to your .emacs/i
 (require 'im-notification)
 (im-notification-setup)
 
-After that setup event listener in your WM. It should be able to tell emacs to send IM information if emacs window becomes inactive or active - emacs lacks hooks for that.
+After that setup event listener in your WM. It should be able to tell emacs to send IM information if emacs window becomes inactive or active - emacs lacks hooks for that. See rc.lua for parts of awesome config used by author.
