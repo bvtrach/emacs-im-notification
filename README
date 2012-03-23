@@ -1,8 +1,8 @@
 Emacs input method notification via D-Bus. Tested with GNU Emacs 23.4 and awesome wm 3.4.9.
 
-Just add im-notification.el to 'your load-path, and than append to your .emacs/init.el:
+Just add im-notification.el to your load-path, and then append following lines to your .emacs/init.el:
 
 (require 'im-notification)
 (im-notification-setup)
 
-After that setup event listener in your WM. It should be able to tell emacs to send IM information if emacs window becomes inactive or active - emacs lacks hooks for that. See rc.lua for parts of awesome config used by author.
+After that configure event listener in your WM. It should be able to tell emacs to send IM information if emacs window becomes inactive or active - emacs lacks hooks for that. See rc.lua for parts of awesome config used by author.

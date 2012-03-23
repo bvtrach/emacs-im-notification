@@ -72,7 +72,7 @@ Deliberately ignores minibuffer since that has its own hooks.")
    "imChanged" (im-notification-get-name)))
 
 (defun im-notification-send-delete ()
-  "Send dbus signal to WM, notifying it that no IM is active. Used when no window is active (window deactivation, etc.)"
+  "Send dbus signal to WM, notifying it that no IM is active. Used also when emacs window is inactive."
   (dbus-send-signal 
    im-notification-bus
    dbus-service-emacs dbus-path-emacs dbus-service-emacs 
