@@ -23,7 +23,7 @@
 
 ;; customization menu setup
 (defun im-notification-bus-safe-p (bus)
-  (if (member bus `(:system :session))
+  (if (memq bus `(:system :session))
       t nil))
 
 (defgroup im-notification nil
@@ -61,7 +61,7 @@ Deliberately ignores minibuffer since that has its own hooks.")
       (capitalize 
        (cadddr (find current-input-method 
 		     input-method-alist 
-		     :test 'string-equal)))))
+		     :test (lambda (a b) (string-equal a (car b))))))
     "nil"))
 
 (defun im-notification-send-current ()
