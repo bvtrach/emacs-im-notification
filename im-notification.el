@@ -1,4 +1,4 @@
-;;; bbcode-mode.el --- Major mode to edit bbcode files in Emacs
+;;; im-notification.el --- emacs input method notification via D-Bus
 ;;
 ;; Author: Bogdan Trach
 ;; Created: February, 2012
@@ -64,12 +64,22 @@ Deliberately ignores minibuffer since that has its own hooks.")
 		     :test (lambda (a b) (string-equal a (car b))))))
     "nil"))
 
+(defun im-notification-frame-visiblep ()
+  (apply '+
+  (mapcar 
+   (lambda (frame-info) 
+     (let ((visibility-info (assoc 'visibility (cadr frame-info))))
+       (if (and visibility-info (eq (cdr visibility-info) t))
+	   1 0)))
+   (cdr (current-frame-configuration)))))
+
 (defun im-notification-send-current ()
   "Send dbus signal with current quail short name to WM. Some problems are possible with session bus."
+  (if (equalp 1 (im-notification-frame-visiblep))
   (dbus-send-signal 
    im-notification-bus
    dbus-service-emacs dbus-path-emacs dbus-service-emacs
-   "imChanged" (im-notification-get-name)))
+   "imChanged" (im-notification-get-name))))
 
 (defun im-notification-send-delete ()
   "Send dbus signal to WM, notifying it that no IM is active. Used also when emacs window is inactive."
@@ -83,9 +93,9 @@ Deliberately ignores minibuffer since that has its own hooks.")
   (add-hook 'input-method-activate-hook 'im-notification-send-current)
   (add-hook 'input-method-inactivate-hook 'im-notification-send-delete)
   (add-hook 'im-notification-buffer-switch-hook 'im-notification-send-current)
-  (add-hook 'window-configuration-change-hook 'im-notification-send-current)
+  ;(add-hook 'window-configuration-change-hook 'im-notification-send-current)
   (add-hook 'delete-frame-functions 'im-notification-send-delete)
-  (add-hook 'mouse-leave-buffer-hook 'im-notification-send-current)
+  ;(add-hook 'mouse-leave-buffer-hook 'im-notification-send-current)
   (dbus-register-signal 
    im-notification-bus nil "/org/awesome/im"
    "org.awesome.im" "imRequest" 'im-notification-request-handler))
