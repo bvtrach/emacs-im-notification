@@ -18,7 +18,31 @@
 ;;
 ;; The hook code was written for jiggle.el by Will Mengarini
 
+(defun im-notification-find-session-file ()
+  "Find file with environment variables which describe D-Bus session bus."
+  (car (last (file-expand-wildcards "~/.dbus/session-bus/*-0"))))
+
+(defun im-notification-load-environment ()
+  "Apply environment variables to emacs environment."
+(let ((file (im-notification-find-session-file)))
+      (when (file-readable-p file)
+	(with-temp-buffer
+	  (insert-file-contents file)
+	  (goto-char (point-min))
+	  (while (not (eobp))
+	    (beginning-of-line)
+	    (when  (not (member (char-after (point)) (list ?\; ?#)))
+	      (add-to-list 'process-environment
+			   (buffer-substring-no-properties
+			    (point)
+			    (point-at-eol)
+			    ))
+	      ) ; no need for last forward-line
+	    (forward-line))))
+      process-environment))
+
 (require 'advice)
+(im-notification-load-environment)
 (require 'dbus)
 
 ;; customization menu setup
@@ -43,31 +67,31 @@ Deliberately ignores minibuffer since that has its own hooks.")
 
 ;;; Implementation of the hook:
 (mapcar (function
-         (lambda (f)
-           (eval
-            `(defadvice ,f (after run-im-notification-buffer-switch-hook act)
-               "Implement im-notification-buffer-switch-hook."
-               (run-hooks 'im-notification-buffer-switch-hook)))))
-        '(bury-buffer
-          kill-buffer
-          other-window
-          pop-to-buffer
-          switch-to-buffer
-          ))
+	 (lambda (f)
+	   (eval
+	    `(defadvice ,f (after run-im-notification-buffer-switch-hook act)
+	       "Implement im-notification-buffer-switch-hook."
+	       (run-hooks 'im-notification-buffer-switch-hook)))))
+	'(bury-buffer
+	  kill-buffer
+	  other-window
+	  pop-to-buffer
+	  switch-to-buffer
+	  ))
 
 (defun im-notification-get-name ()
   "Get short input method name (the one from the modeline)."
-  (if current-input-method 
-      (capitalize 
-       (cadddr (find current-input-method 
-		     input-method-alist 
+  (if current-input-method
+      (capitalize
+       (cadddr (find current-input-method
+		     input-method-alist
 		     :test (lambda (a b) (string-equal a (car b))))))
     "nil"))
 
 (defun im-notification-frame-visiblep ()
   (apply '+
-  (mapcar 
-   (lambda (frame-info) 
+  (mapcar
+   (lambda (frame-info)
      (let ((visibility-info (assoc 'visibility (cadr frame-info))))
        (if (and visibility-info (eq (cdr visibility-info) t))
 	   1 0)))
@@ -76,16 +100,16 @@ Deliberately ignores minibuffer since that has its own hooks.")
 (defun im-notification-send-current ()
   "Send dbus signal with current quail short name to WM. Some problems are possible with session bus."
   (if (equalp 1 (im-notification-frame-visiblep))
-  (dbus-send-signal 
+  (dbus-send-signal
    im-notification-bus
    dbus-service-emacs dbus-path-emacs dbus-service-emacs
    "imChanged" (im-notification-get-name))))
 
 (defun im-notification-send-delete ()
   "Send dbus signal to WM, notifying it that no IM is active. Used also when emacs window is inactive."
-  (dbus-send-signal 
+  (dbus-send-signal
    im-notification-bus
-   dbus-service-emacs dbus-path-emacs dbus-service-emacs 
+   dbus-service-emacs dbus-path-emacs dbus-service-emacs
    "imChanged" "nil"))
 
 (defun im-notification-setup ()
@@ -96,13 +120,13 @@ Deliberately ignores minibuffer since that has its own hooks.")
   ;(add-hook 'window-configuration-change-hook 'im-notification-send-current)
   (add-hook 'delete-frame-functions 'im-notification-send-delete)
   ;(add-hook 'mouse-leave-buffer-hook 'im-notification-send-current)
-  (dbus-register-signal 
+  (dbus-register-signal
    im-notification-bus nil "/org/awesome/im"
    "org.awesome.im" "imRequest" 'im-notification-request-handler))
 
 (defun im-notification-check-session-bus ()
   "Check if emacs process has access to session bus."
-  (if (find "DBUS_SESSION_BUS_ADDRESS" 
+  (if (find "DBUS_SESSION_BUS_ADDRESS"
 	    process-environment
 	    :test 'string-match)
       t nil))
