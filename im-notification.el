@@ -17,6 +17,20 @@
 ;;     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;;
 ;; The hook code was written for jiggle.el by Will Mengarini
+(require 'cl-lib)
+(require 'dbus)
+
+
+(defun im-notification-check-session-bus ()
+  "Check if emacs process has access to session bus."
+  (if (cl-find "DBUS_SESSION_BUS_ADDRESS"
+	    process-environment
+	    :test 'string-match)
+      t nil))
+
+(if (im-notification-check-session-bus)
+    (setq im-notification-bus  (getenv "DBUS_SESSION_BUS_ADDRESS")))
+(dbus-init-bus im-notification-bus)
 
 (defun im-notification-find-session-file ()
   "Find file with environment variables which describe D-Bus session bus."
@@ -45,20 +59,20 @@
 (im-notification-load-environment)
 (require 'dbus)
 
-;; customization menu setup
-(defun im-notification-bus-safe-p (bus)
-  (if (memq bus `(:system :session))
-      t nil))
+;; ;; customization menu setup
+;; (defun im-notification-bus-safe-p (bus)
+;;   (if (memq bus `(:system :session))
+;;       t nil))
 
-(defgroup im-notification nil
-  "Input method notification options."
-  :group 'convenience)
+;; (defgroup im-notification nil
+;;   "Input method notification options."
+;;   :group 'convenience)
 
-(defcustom im-notification-bus :system
-  "D-bus bus for notification. Session bus may be unavailable from Emacs-daemon."
-  :group 'im-notification
-  :type 'symbol
-  :safe 'im-notification-bus-safe-p)
+;; (defcustom im-notification-bus :system
+;;   "D-bus bus for notification. Session bus may be unavailable from Emacs-daemon."
+;;   :group 'im-notification
+;;   :type 'symbol
+;;   :safe 'im-notification-bus-safe-p)
 
 ;; Definition of a hook
 (defvar im-notification-buffer-switch-hook nil
@@ -83,7 +97,7 @@ Deliberately ignores minibuffer since that has its own hooks.")
   "Get short input method name (the one from the modeline)."
   (if current-input-method
       (capitalize
-       (cadddr (find current-input-method
+       (cl-cadddr (cl-find current-input-method
 		     input-method-alist
 		     :test (lambda (a b) (string-equal a (car b))))))
     "nil"))
@@ -97,15 +111,15 @@ Deliberately ignores minibuffer since that has its own hooks.")
 	   1 0)))
    (cdr (current-frame-configuration)))))
 
-(defun im-notification-send-current ()
+(defun im-notification-send-current (&rest args)
   "Send dbus signal with current quail short name to WM. Some problems are possible with session bus."
-  (if (equalp 1 (im-notification-frame-visiblep))
+  (if (cl-equalp 1 (im-notification-frame-visiblep))
   (dbus-send-signal
    im-notification-bus
    dbus-service-emacs dbus-path-emacs dbus-service-emacs
    "imChanged" (im-notification-get-name))))
 
-(defun im-notification-send-delete ()
+(defun im-notification-send-delete (&rest args)
   "Send dbus signal to WM, notifying it that no IM is active. Used also when emacs window is inactive."
   (dbus-send-signal
    im-notification-bus
@@ -115,7 +129,7 @@ Deliberately ignores minibuffer since that has its own hooks.")
 (defun im-notification-setup ()
   "Setup hooks and a callback listener for notifications."
   (add-hook 'input-method-activate-hook 'im-notification-send-current)
-  (add-hook 'input-method-inactivate-hook 'im-notification-send-delete)
+  (add-hook 'input-method-deactivate-hook 'im-notification-send-delete)
   (add-hook 'im-notification-buffer-switch-hook 'im-notification-send-current)
   ;(add-hook 'window-configuration-change-hook 'im-notification-send-current)
   (add-hook 'delete-frame-functions 'im-notification-send-delete)
@@ -123,13 +137,6 @@ Deliberately ignores minibuffer since that has its own hooks.")
   (dbus-register-signal
    im-notification-bus nil "/org/awesome/im"
    "org.awesome.im" "imRequest" 'im-notification-request-handler))
-
-(defun im-notification-check-session-bus ()
-  "Check if emacs process has access to session bus."
-  (if (find "DBUS_SESSION_BUS_ADDRESS"
-	    process-environment
-	    :test 'string-match)
-      t nil))
 
 ;; code for handling callback from window manager
 (defun im-notification-request-handler (id)
