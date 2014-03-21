@@ -20,9 +20,9 @@
 ;; The hook code was written for jiggle.el by Will Mengarini
 (require 'cl-lib)
 (require 'dbus)
-(require 'async)
+
 (defvar im-notification-bus)
-(defvar im-notification-last-im)
+(defvar im-notification-last-used-im t)
 
 (defun im-notification-check-session-bus ()
   "Check if emacs process has access to session bus."
@@ -67,6 +67,7 @@
   "Hook that runs any time the user switches buffers.
 Deliberately ignores minibuffer since that has its own hooks.")
 
+
 ;;; Implementation of the hook:
 (mapc (function
        (lambda (f)
@@ -100,26 +101,28 @@ Deliberately ignores minibuffer since that has its own hooks.")
 
 (defun im-notification-send-current (&rest args)
   "Send dbus signal with current quail short name to WM. Some problems are possible with session bus."
-  (when (or (and
-	     (not (null args))
-	     (cl-equalp :force-send (car args)))
-	    (and
-	     (not (string= im-notification-last-im current-input-method))
-	     (>= (im-notification-frame-visiblep) 1)))
-    (message "Sending notification")
-    (setq im-notification-last-im current-input-method)
-    (dbus-send-signal
-     im-notification-bus
-     "org.naquadah.awesome.awful" "/" "org.awesome.im"
-     "imChanged" (im-notification-get-name))))
+   (when (or (and
+	      (not (null args))
+	      (cl-equalp :force-send (car args)))
+	     (and
+	      (not (string= im-notification-last-used-im current-input-method))
+	      (not (minibufferp))
+	      (not isearch-mode)
+	      (>= (im-notification-frame-visiblep) 1)))
+     (setq im-notification-last-used-im current-input-method)
+     (dbus-send-signal
+      im-notification-bus
+      "org.naquadah.awesome.awful" "/" "org.awesome.im"
+      "imChanged" (im-notification-get-name))))
 
 (defun im-notification-send-delete (&rest args)
   "Send dbus signal to WM, notifying it that no IM is active. Used also when emacs window is inactive."
-  (setq im-notification-last-im nil)
-  (dbus-send-signal
-   im-notification-bus
-   "org.naquadah.awesome.awful" "/" "org.awesome.im"
-   "imChanged" "nil"))
+  (when (not (null im-notification-last-used-im))
+    (setq im-notification-last-used-im nil)
+    (dbus-send-signal
+     im-notification-bus
+     "org.naquadah.awesome.awful" "/" "org.awesome.im"
+     "imChanged" "nil")))
 
 (defun im-notification-setup ()
   "Setup hooks and a callback listener for notifications."
@@ -131,6 +134,8 @@ Deliberately ignores minibuffer since that has its own hooks.")
   (add-hook 'im-notification-buffer-switch-hook 'im-notification-send-current)
   ;(add-hook 'window-configuration-change-hook 'im-notification-send-current)
   (add-hook 'delete-frame-functions 'im-notification-send-delete)
+  (add-hook 'isearch-mode-end-hook (lambda ()
+				     (im-notification-request-handler nil)))
   ;(add-hook 'mouse-leave-buffer-hook 'im-notification-send-current)
   (dbus-register-signal
    im-notification-bus nil "/org/awesome/im"
