@@ -2,6 +2,7 @@
 ;;
 ;; Author: Bogdan Trach
 ;; Created: February, 2012
+;; Updated: September, 2013
 ;;
 ;;     This program is free software: you can redistribute it and/or modify
 ;;     it under the terms of the GNU General Public License as published by
@@ -19,7 +20,9 @@
 ;; The hook code was written for jiggle.el by Will Mengarini
 (require 'cl-lib)
 (require 'dbus)
-
+(require 'async)
+(defvar im-notification-bus)
+(defvar im-notification-last-im)
 
 (defun im-notification-check-session-bus ()
   "Check if emacs process has access to session bus."
@@ -59,39 +62,23 @@
 (im-notification-load-environment)
 (require 'dbus)
 
-;; ;; customization menu setup
-;; (defun im-notification-bus-safe-p (bus)
-;;   (if (memq bus `(:system :session))
-;;       t nil))
-
-;; (defgroup im-notification nil
-;;   "Input method notification options."
-;;   :group 'convenience)
-
-;; (defcustom im-notification-bus :system
-;;   "D-bus bus for notification. Session bus may be unavailable from Emacs-daemon."
-;;   :group 'im-notification
-;;   :type 'symbol
-;;   :safe 'im-notification-bus-safe-p)
-
 ;; Definition of a hook
 (defvar im-notification-buffer-switch-hook nil
   "Hook that runs any time the user switches buffers.
 Deliberately ignores minibuffer since that has its own hooks.")
 
 ;;; Implementation of the hook:
-(mapcar (function
-	 (lambda (f)
-	   (eval
-	    `(defadvice ,f (after run-im-notification-buffer-switch-hook act)
-	       "Implement im-notification-buffer-switch-hook."
+(mapc (function
+       (lambda (f)
+	 (eval
+	  `(defadvice ,f (after run-im-notification-buffer-switch-hook act)
+	     "Implement im-notification-buffer-switch-hook."
 	       (run-hooks 'im-notification-buffer-switch-hook)))))
-	'(bury-buffer
-	  kill-buffer
-	  other-window
-	  pop-to-buffer
-	  switch-to-buffer
-	  ))
+      '(bury-buffer
+	kill-buffer
+	other-window
+	pop-to-buffer
+	switch-to-buffer))
 
 (defun im-notification-get-name ()
   "Get short input method name (the one from the modeline)."
@@ -113,21 +100,32 @@ Deliberately ignores minibuffer since that has its own hooks.")
 
 (defun im-notification-send-current (&rest args)
   "Send dbus signal with current quail short name to WM. Some problems are possible with session bus."
-  (if (cl-equalp 1 (im-notification-frame-visiblep))
-  (dbus-send-signal
-   im-notification-bus
-   dbus-service-emacs dbus-path-emacs dbus-service-emacs
-   "imChanged" (im-notification-get-name))))
+  (when (or (and
+	     (not (null args))
+	     (cl-equalp :force-send (car args)))
+	    (and
+	     (not (string= im-notification-last-im current-input-method))
+	     (>= (im-notification-frame-visiblep) 1)))
+    (message "Sending notification")
+    (setq im-notification-last-im current-input-method)
+    (dbus-send-signal
+     im-notification-bus
+     "org.naquadah.awesome.awful" "/" "org.awesome.im"
+     "imChanged" (im-notification-get-name))))
 
 (defun im-notification-send-delete (&rest args)
   "Send dbus signal to WM, notifying it that no IM is active. Used also when emacs window is inactive."
+  (setq im-notification-last-im nil)
   (dbus-send-signal
    im-notification-bus
-   dbus-service-emacs dbus-path-emacs dbus-service-emacs
+   "org.naquadah.awesome.awful" "/" "org.awesome.im"
    "imChanged" "nil"))
 
 (defun im-notification-setup ()
   "Setup hooks and a callback listener for notifications."
+  ;;focus-in-hook
+  ;;focus-out-hook
+
   (add-hook 'input-method-activate-hook 'im-notification-send-current)
   (add-hook 'input-method-deactivate-hook 'im-notification-send-delete)
   (add-hook 'im-notification-buffer-switch-hook 'im-notification-send-current)
@@ -141,6 +139,6 @@ Deliberately ignores minibuffer since that has its own hooks.")
 ;; code for handling callback from window manager
 (defun im-notification-request-handler (id)
   "If request is received, notify WM. Used when window is activated or deactivated, due to lack of some hooks in emacs."
-  (im-notification-send-current))
+  (im-notification-send-current :force-send))
 
 (provide 'im-notification)
